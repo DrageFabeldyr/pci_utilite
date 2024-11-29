@@ -372,11 +372,13 @@ static int my_open(struct inode *inode, struct file *file)
 {
 	printk(KERN_INFO "my driver - open function\n");
 	
+	/* для сетевой карты
 	// установим разрешение на запись регистров конфигурации
 	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
 	printk(KERN_INFO "my driver - command reg 93C46 write 0x%x\n", writeledenable);
 	iowrite8(writeledenable, ptr_bar0 + commandreg);
 	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
+	*/
 
 	return 0;
 }
@@ -441,7 +443,8 @@ static ssize_t my_read(struct file *file, char __user *buf, size_t count, loff_t
 	//printk(KERN_INFO "my driver - read function\n");
 	
 	//printk(KERN_INFO "my driver - config register 1 is 0x%x\n", ioread8(ptr_bar0 + confreg1));
-	res = ioread8(ptr_bar0 + *offset);
+	//res = ioread8(ptr_bar0 + *offset);
+	res = ioread8(*offset);
 	status = copy_to_user(buf, &res, sizeof(res)); // addr to in user space, addr from in kernel space, num of bytes to copy
 	if (status) // 0 - всё хорошо, иначе количество байт, которые не удалось скопировать
 	{
@@ -481,7 +484,8 @@ static ssize_t my_write(struct file *file, const char __user *buf, size_t count,
 	}
 	printk(KERN_INFO "my driver - config register 1 write 0x%x\n", res);
 	//iowrite8(res, ptr_bar0 + confreg1);
-	iowrite8(res, ptr_bar0 + *offset);
+	//iowrite8(res, ptr_bar0 + *offset);
+	iowrite8(res, *offset);
 
 	return count;
 }

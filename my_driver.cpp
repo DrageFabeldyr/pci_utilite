@@ -68,6 +68,7 @@ void MyDriver::do_reg()
         {
             qDebug() << "tick! ->";
 
+            /* для сетевой
             // читаем
             read_res = pread(fds[i], (void*)&buf, sizeof(buf), reg_addr);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
@@ -80,17 +81,21 @@ void MyDriver::do_reg()
             buf = data;
             //write_res = write(fds[i], (void*)&buf, sizeof(buf));
             write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), reg_addr);
+            */
 
-            /*
+
             qDebug() << "tack! ->";
             // читаем
+            read_res = pread(fds[i], (void*)&buf, sizeof(buf), bar0baseaddr + shift);
+            inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data from bar0 byte" << shift << ": " << inHex;
             read_res = pread(fds[i], (void*)&buf, sizeof(buf), bar1baseaddr + shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "data from register: " << inHex;
+            qDebug() << "data from bar1 byte" << shift << ": " << inHex;
             shift++;
-            if (shift >= 32)
+            if (shift >= 8)
                 shift = 0;
-                */
+
         }
     }
 

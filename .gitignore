@@ -6,3 +6,17 @@
 *.swp
 
 *~*
+
+*.o
+
+*.mod
+
+*.ko
+
+*.cmd
+
+pci_driver/modules.order
+
+pci_driver/Module.symvers
+
+pci_driver/mypcidriver.mod.c
