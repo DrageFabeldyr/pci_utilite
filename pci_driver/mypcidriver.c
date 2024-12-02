@@ -17,12 +17,12 @@
 #define MY_VENDOR_ID 0x9710
 #define MY_DEVICE_ID 0x9835
 
-#define MAX_DEV 1			// пока непонятно - это количество модулей или количество каких-то сущностей внутри каждого модуля
+#define MAX_DEV 1			// пока непонятно - это количество PCI-устройств или количество каких-то сущностей внутри одного PCI-устройства
 
 /* test */
-#define commandreg 0x0050 // command reg 93C46 offset
+#define commandreg 0x0050 	// command reg 93C46 offset (конфиг 0)
 #define writeledenable 0xC0 // нужно записать в конфиг 0, чтобы можно было управлять конфиг 1
-#define confreg1 0x0052 // config reg 1 offset
+#define confreg1 0x0052 	// config reg 1 offset
 #define led1 0x80
 #define led0 0x40
 #define leds 0xC0

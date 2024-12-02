@@ -14,7 +14,7 @@ MyDriver::MyDriver()
     QTimer *my_timer = new QTimer();
     connect(my_timer, &QTimer::timeout, this, &MyDriver::do_reg);
 
-    for (int i = 0; i < num_of_modules; i++)
+    for (int i = 0; i < num_of_devices; i++)
     {
         // путь до файла модуля
         QString str = QString("/dev/my_device-%1").arg(i);
@@ -49,7 +49,7 @@ MyDriver::MyDriver()
 
 MyDriver::~MyDriver()
 {
-    for (int i = 0; i < num_of_modules; i++)
+    for (int i = 0; i < num_of_devices; i++)
         if (fds[i] != -1) // а нужна ли эта проверка?
             close(fds[i]);
 }
@@ -59,10 +59,10 @@ MyDriver::~MyDriver()
 void MyDriver::do_reg()
 {
     QString inHex = "", addrHex = "";
-    off_t reg_addr = /*bar0baseaddr +*/ 0x0052; // адрес регистра внутри bar0
+    off_t reg_addr = /*bar0baseaddr +*/ 0x0052; // адрес регистра индикаторов сетевой карты внутри bar0
 
 
-    for (int i = 0; i < num_of_modules; i++)
+    for (int i = 0; i < num_of_devices; i++)
     {
         if (fds[i] != -1)
         {
