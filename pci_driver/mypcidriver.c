@@ -87,7 +87,7 @@ struct my_device_data
 };
 
 
-void __iomem *ptr_bar0, *ptr_bar1;
+void __iomem *ptr_bar0, *ptr_bar1, *addr;
 static int dev_major = 0; // уникальный номер, выдаваемый драйверу
 static int dev_minor = 0; // номер устройства, использующего драйвер
 static unsigned long bar0baseaddr = 0;
@@ -372,13 +372,12 @@ static int my_open(struct inode *inode, struct file *file)
 {
 	printk(KERN_INFO "my driver - open function\n");
 	
-	/* для сетевой карты
+	/* для сетевой карты */
 	// установим разрешение на запись регистров конфигурации
 	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
 	printk(KERN_INFO "my driver - command reg 93C46 write 0x%x\n", writeledenable);
 	iowrite8(writeledenable, ptr_bar0 + commandreg);
 	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
-	*/
 
 	return 0;
 }
@@ -419,6 +418,14 @@ static long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		case GET_BAR1_ADDR:
 			return bar1baseaddr;
 		
+		case SET_BAR0:
+			addr = ptr_bar0;
+			break;
+		
+		case SET_BAR1:
+			addr = ptr_bar1;
+			break;
+		
 		default:
 			return -EINVAL;
 	};
@@ -440,18 +447,22 @@ static long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static ssize_t my_read(struct file *file, char __user *buf, size_t count, loff_t *offset)
 {
 	int res, status;
+	
+	//addr = 0;
+	//addr += *offset;
 	//printk(KERN_INFO "my driver - read function\n");
 	
 	//printk(KERN_INFO "my driver - config register 1 is 0x%x\n", ioread8(ptr_bar0 + confreg1));
+	//res = ioread8(ptr_bar0 + confreg1);
 	//res = ioread8(ptr_bar0 + *offset);
-	res = ioread8(*offset);
+	res = ioread8(addr + *offset);
 	status = copy_to_user(buf, &res, sizeof(res)); // addr to in user space, addr from in kernel space, num of bytes to copy
 	if (status) // 0 - всё хорошо, иначе количество байт, которые не удалось скопировать
 	{
 		printk(KERN_ERR "my driver - error copying to user, can't copy %d bytes\n", status);
 		return -EFAULT;
 	}
-	printk(KERN_INFO "my driver - config register 1 is 0x%x\n", res);
+	printk(KERN_INFO "my driver - register 0x%x read: 0x%x\n", addr, res);
 
 	return sizeof(res);
 }
@@ -472,6 +483,8 @@ static ssize_t my_write(struct file *file, const char __user *buf, size_t count,
 	//int i;
 	int res, status;
 	
+	//addr = 0;
+	//addr += *offset;
 	//printk(KERN_INFO "my driver - write function\n");
 	
 	//get_random_bytes(&i, sizeof(i)); // генерим случайное число
@@ -482,10 +495,10 @@ static ssize_t my_write(struct file *file, const char __user *buf, size_t count,
 		printk(KERN_ERR "my driver - error copying from user, can't copy %d bytes\n", status);
 		return -EFAULT;
 	}
-	printk(KERN_INFO "my driver - config register 1 write 0x%x\n", res);
+	printk(KERN_INFO "my driver - register 0x%x write: 0x%x\n", addr, res);
 	//iowrite8(res, ptr_bar0 + confreg1);
 	//iowrite8(res, ptr_bar0 + *offset);
-	iowrite8(res, *offset);
+	iowrite8(res, addr + *offset);
 
 	return count;
 }

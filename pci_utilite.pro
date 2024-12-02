@@ -13,5 +13,4 @@ SOURCES += main.cpp \
     my_driver.cpp
 
 HEADERS += \
-    my_driver.h \
-    mycommandlist.h
+    my_driver.h

@@ -9,5 +9,8 @@
 #define GET_BAR0_ADDR 0x50
 #define GET_BAR1_ADDR 0x51
 
+#define SET_BAR0 0x60
+#define SET_BAR1 0x61
+
 #endif
 

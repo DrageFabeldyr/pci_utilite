@@ -1,5 +1,5 @@
 #include "my_driver.h"
-#include "mycommandlist.h"
+#include "pci_driver/mycommandlist.h"
 
 #include <QDebug>
 #include <fcntl.h>      // для open()
@@ -58,21 +58,23 @@ MyDriver::~MyDriver()
 // реализация чтения/записи регистров по таймеру
 void MyDriver::do_reg()
 {
-    QString inHex = "";
-    off_t reg_addr = bar0baseaddr + 0x0052; // адрес регистра внутри bar0
+    QString inHex = "", addrHex = "";
+    off_t reg_addr = /*bar0baseaddr +*/ 0x0052; // адрес регистра внутри bar0
 
 
     for (int i = 0; i < num_of_modules; i++)
     {
         if (fds[i] != -1)
         {
-            qDebug() << "tick! ->";
 
             /* для сетевой
+            qDebug() << "tick! ->";
             // читаем
+            ioctl(fds[i], SET_BAR0, 0);
             read_res = pread(fds[i], (void*)&buf, sizeof(buf), reg_addr);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "data from register: " << inHex;
+            addrHex = "0x" + QString("%1").arg(reg_addr, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data from " << addrHex << " register: " << inHex;
 
             // пишем
             unsigned int data = (qrand() % 4) * 0x40; // случайным образом заполним два старших бита
@@ -81,21 +83,50 @@ void MyDriver::do_reg()
             buf = data;
             //write_res = write(fds[i], (void*)&buf, sizeof(buf));
             write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), reg_addr);
-            */
+            //*/
 
 
+            /* для PCI-COM конвертора */
             qDebug() << "tack! ->";
             // читаем
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), bar0baseaddr + shift);
+            ioctl(fds[i], SET_BAR0, 0);
+            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar0 byte" << shift << ": " << inHex;
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), bar1baseaddr + shift);
+            ioctl(fds[i], SET_BAR1, 0);
+            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
+
+            // пишем
+            //unsigned int data = (qrand() % 4) * 0x40; // случайным образом заполним два старших бита
+            unsigned int data0 = (qrand() % 4) * 0x55; // случайным образом заполним
+            inHex = "0x" + QString("%1").arg(data0, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data to write: " << inHex;
+            buf = data0;
+            ioctl(fds[i], SET_BAR0, 0);
+            write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+            unsigned int data1 = (qrand() % 4) * 0x55; // случайным образом заполним
+            inHex = "0x" + QString("%1").arg(data1, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data to write: " << inHex;
+            buf = data1;
+            ioctl(fds[i], SET_BAR1, 0);
+            write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+
+            // читаем снова
+            ioctl(fds[i], SET_BAR0, 0);
+            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data from bar0 byte" << shift << ": " << inHex;
+            ioctl(fds[i], SET_BAR1, 0);
+            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "data from bar1 byte" << shift << ": " << inHex;
+
             shift++;
             if (shift >= 8)
                 shift = 0;
-
+                //*/
         }
     }
 
