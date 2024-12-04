@@ -58,36 +58,14 @@ MyDriver::~MyDriver()
 // реализация чтения/записи регистров по таймеру
 void MyDriver::do_reg()
 {
-    QString inHex = "", addrHex = "";
-    off_t reg_addr = /*bar0baseaddr +*/ 0x0052; // адрес регистра индикаторов сетевой карты внутри bar0
-
+    QString inHex = "";
 
     for (int i = 0; i < num_of_devices; i++)
     {
         if (fds[i] != -1)
         {
-
-            /* для сетевой
-            qDebug() << "tick! ->";
-            // читаем
-            ioctl(fds[i], SET_BAR0, 0);
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), reg_addr);
-            inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            addrHex = "0x" + QString("%1").arg(reg_addr, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "data from " << addrHex << " register: " << inHex;
-
-            // пишем
-            unsigned int data = (qrand() % 4) * 0x40; // случайным образом заполним два старших бита
-            inHex = "0x" + QString("%1").arg(data, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "data to write: " << inHex;
-            buf = data;
-            //write_res = write(fds[i], (void*)&buf, sizeof(buf));
-            write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), reg_addr);
-            //*/
-
-
             /* для PCI-COM конвертора */
-            qDebug() << "tack! ->";
+            qDebug() << "my_device-" << i << "-------------------->";
             // читаем
             ioctl(fds[i], SET_BAR0, 0);
             read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
@@ -99,7 +77,6 @@ void MyDriver::do_reg()
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
 
             // пишем
-            //unsigned int data = (qrand() % 4) * 0x40; // случайным образом заполним два старших бита
             unsigned int data0 = (qrand() % 4) * 0x55; // случайным образом заполним
             inHex = "0x" + QString("%1").arg(data0, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data to write: " << inHex;
@@ -122,12 +99,15 @@ void MyDriver::do_reg()
             read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
-
-            shift++;
-            if (shift >= 8)
-                shift = 0;
-                //*/
+            //*/
         }
     }
-
+    /* для PCI-COM конвертора */
+    shift++;
+    if (shift >= 8)
+    {
+        shift = 0;
+        qDebug() << "----------new-circle----------";
+    }
+    //*/
 }

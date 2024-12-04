@@ -1,32 +1,19 @@
 #include <linux/module.h>	// обязательно для всех модулей
 #include <linux/init.h>		// для init и exit
-#include <linux/pci.h>
-#include <linux/device.h>	// для device_create
-#include <linux/cdev.h>		// для cdev_init, cdev_add // для работы с символьными устройствами
+#include <linux/pci.h>		// 
+#include <linux/device.h>	// для device_create			// для работы с файлами устройств
+#include <linux/cdev.h>		// для cdev_init, cdev_add		// для работы с символьными устройствами
 #include <linux/fs.h>		// для file_operations
 #include <linux/random.h>	// для get_random_bytes
 #include <linux/list.h>		// 
 #include <linux/mutex.h>	// 
 
-
 #include "mycommandlist.h"	// список команд для ioctl
 
-
-// сетевая карта
-//#define MY_VENDOR_ID 0x10EC
-//#define MY_DEVICE_ID 0x8139
 
 // PCI - COM конвертор
 #define MY_VENDOR_ID 0x9710
 #define MY_DEVICE_ID 0x9835
-
-/* test */
-#define commandreg 0x0050 	// command reg 93C46 offset (конфиг 0)
-#define writeledenable 0xC0 // нужно записать в конфиг 0, чтобы можно было управлять конфиг 1
-#define confreg1 0x0052 	// config reg 1 offset
-#define led1 0x80
-#define led0 0x40
-#define leds 0xC0
 
 
 // метаданные
@@ -36,9 +23,11 @@ MODULE_DESCRIPTION("MY PCI DRIVER");
 
 
 // глобальные переменные
-LIST_HEAD(card_list);		// список PCI-устройств
+LIST_HEAD(card_list);			// список PCI-устройств
 static struct mutex lock;
-static int card_count = 0;	// количество PCI-устройств
+static int card_count = 0;		// количество PCI-устройств
+static int dev_major = 0; 		// уникальный номер, выдаваемый драйверу
+static struct class *my_class;	// класс для создания файла устройства
 
 
 // таблица пар Vendor ID и Device ID, с которыми может работать драйвер:
@@ -57,8 +46,8 @@ MODULE_DEVICE_TABLE(pci, my_ids);
 // прототипы функций (функции должны быть определены выше точки использования)
 static int 	my_probe(struct pci_dev *pdev, const struct pci_device_id *id);
 static void my_remove(struct pci_dev *pdev);
-int create_char_dev(void);
-int destroy_char_dev(void);
+//int create_char_dev(void);
+//int destroy_char_dev(void);
 static int my_open(struct inode *inode, struct file *file);
 static int my_release(struct inode *inode, struct file *file);
 static long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
@@ -93,23 +82,9 @@ struct my_device {
 	struct list_head list;						// позиция в списке
 	struct cdev cdev;							// связанное символьное устройство
 	dev_t dev_nr;								// номер устройства
+	unsigned long bar0addr, bar1addr;			// начальные адреса bar0, bar1
+	struct device *device_file;					// файл устройства
 };
-
-/*
-// структура для связи файла устройства с символьным устройством
-struct my_device_data
-{
-	struct device *my_device;	// файл устройства
-	struct cdev my_cdev; 		// символьное устройство
-}mydev;
-*/
-
-//void __iomem *ptr_bar0, *ptr_bar1, *addr;
-static int dev_major = 0; // уникальный номер, выдаваемый драйверу
-static int dev_minor = 0; // номер устройства, использующего драйвер
-static unsigned long bar0baseaddr = 0;
-static unsigned long bar1baseaddr = 0;
-static struct class *my_class;	// класс для создания файла устройства
 
 
 // функция входа в ядро Linux
@@ -127,17 +102,28 @@ static int __init my_init(void)
 		return status;
 	}
 	dev_major = MAJOR(dev_nr); // "номер" драйвера
-	dev_minor = MINOR(dev_nr); // "номер" устройства
-	printk(KERN_INFO "my driver - device number = %d, major = %d, minor = %d\n", dev_nr, dev_major, dev_minor);
-
+	printk(KERN_INFO "my driver - major (driver number) = %d\n", dev_major);
 	
+	// создадим класс, в системе появится /sys/class/my_class
+	my_class = class_create(THIS_MODULE, "my_class");
+	if (IS_ERR(my_class))
+	{
+		printk(KERN_ERR "my driver - could not create class structure for device\n");
+		unregister_chrdev_region(dev_nr, MINORMASK + 1);
+		return -1;
+	}
+	else
+		printk(KERN_INFO "my driver - class structure for device created\n");
+
 	// инициализируем мьютекс
 	mutex_init(&lock);
 
+	// зарегистрируем драйвер в системе
 	status = pci_register_driver(&my_driver);
 	if (status < 0)
 	{
 		printk(KERN_ERR "my driver - error registering the driver\n");
+		class_destroy(my_class);
 		unregister_chrdev_region(dev_nr, MINORMASK + 1);
 		return status;
 	}
@@ -151,19 +137,13 @@ static void __exit my_exit(void)
 {
 	printk(KERN_INFO "my driver - __exit, unregistering driver\n");
 
-	unregister_chrdev_region(MKDEV(dev_major, 0), MINORMASK + 1); // найдём dev_nr с помощью MKDEV
+	class_destroy(my_class);
+	unregister_chrdev_region(MKDEV(dev_major, 0), MINORMASK + 1);
 	pci_unregister_driver(&my_driver);
 }
 
 
-/**
- * @brief 		функция чтения конфигурационного пространства PCI (вынесем отдельно, чтобы не нагромождать probe)
- *
- * @param dev	указатель на pci устройство
- *
- * @return 		0, если всё хорошо
- *				отрицательный код ошибки, если нет
- */
+// функция чтения конфигурационного пространства PCI (вынесем отдельно, чтобы не нагромождать probe)
 int read_device_config(struct pci_dev *pdev)
 {
 	u16 vendor, device, status_reg, command_reg;
@@ -216,7 +196,9 @@ int read_device_config(struct pci_dev *pdev)
 // если они есть в таблице устройств (pci_device_id)
 static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
-	int status, len; // для вывода всяких проверяемых значений
+	int status, len;	// для вывода всяких проверяемых значений
+	int dev_minor = 0;	// номер устройства, использующего драйвер
+
 	struct my_device *my;
 	
 	printk(KERN_INFO "my driver - probe function\n");
@@ -226,6 +208,7 @@ static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return -ENOMEM; 
 	
 	mutex_lock(&lock);
+	
 	// инициализируем символьное устройство
 	cdev_init(&my->cdev, &my_fops);
 	// выдадим ему номер
@@ -239,6 +222,18 @@ static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 	// добавим его в наш список устройств
 	list_add_tail(&my->list, &card_list);
+	
+	// добавим устройство в систему, в системе появятся /dev/my_device-0 (теперь мы сможем обращаться к нему из пространства пользователя)
+	my->device_file = device_create(my_class, NULL, my->dev_nr, NULL, "my_device-%d", MINOR(my->dev_nr)); // класс, родительское устр-во, dev_t, доп.данные, имя
+	if (IS_ERR(my->device_file))
+	{
+		printk(KERN_ERR "my driver - could not create device%d\n", 0);
+		return -1;
+	}
+	else
+		printk(KERN_INFO "my driver - device /dev/my_device-%d created\n", MINOR(my->dev_nr));
+
+	
 	mutex_unlock(&lock);
 	
 	my->pdev = pdev;
@@ -251,6 +246,8 @@ static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return status;
 	}
 	
+	dev_minor = MINOR(my->dev_nr); // "номер" устройства
+	printk(KERN_INFO "my driver - device number = %d, major = %d, minor = %d\n", my->dev_nr, dev_major, dev_minor);
 	// прочитаем размер BAR0
 	len = pci_resource_len(my->pdev, 0);
 	printk(KERN_INFO "my driver - BAR0 is %d bytes in size\n", len);
@@ -258,10 +255,10 @@ static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	len = pci_resource_len(my->pdev, 1);
 	printk(KERN_INFO "my driver - BAR1 is %d bytes in size\n", len);
 	// найдём их начальные адреса
-	bar0baseaddr = pci_resource_start(my->pdev, 0);
-	printk(KERN_INFO "my driver - BAR0 is mapped to 0x%lx\n", bar0baseaddr);
-	bar1baseaddr = pci_resource_start(my->pdev, 1);
-	printk(KERN_INFO "my driver - BAR1 is mapped to 0x%lx\n", bar1baseaddr);
+	my->bar0addr = pci_resource_start(my->pdev, 0);
+	printk(KERN_INFO "my driver - BAR0 is mapped to 0x%lx\n", my->bar0addr);
+	my->bar1addr = pci_resource_start(my->pdev, 1);
+	printk(KERN_INFO "my driver - BAR1 is mapped to 0x%lx\n", my->bar1addr);
 	
 	status = pcim_enable_device(my->pdev); // если использовать pci_ вместо pcim_, придётся делать pci_disable_device, а так система сама всё сделает
 	if (status < 0)
@@ -300,27 +297,11 @@ static int my_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		return -1;
 	}
 	
-	/* test:
-	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
-	printk(KERN_INFO "my driver - command reg 93C46 write 0x%x\n", writeledenable);
-	iowrite8(writeledenable, ptr_bar0 + commandreg);
-	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
-	printk(KERN_INFO "my driver - config register 1 is 0x%x\n", ioread8(ptr_bar0 + confreg1));
-	printk(KERN_INFO "my driver - config register 1 write 0x%x\n", leds);
-	iowrite8(leds, ptr_bar0 + confreg1);
-	printk(KERN_INFO "my driver - config register 1 is 0x%x\n", ioread8(ptr_bar0 + confreg1));
-	*/
-	
-	
 	return 0;
 }
 
 
-/**
- * @brief 		функция, вызываемая ядром при выгрузке драйвера, служит для освобождения каких-зибо ранее занятых ресурсов
- *
- * @param dev	указатель на pci устройство
- */
+// функция, вызываемая ядром при выгрузке драйвера, служит для освобождения каких-зибо ранее занятых ресурсов
 static void my_remove(struct pci_dev *pdev)
 {
 	struct my_device *my, *next;
@@ -337,81 +318,6 @@ static void my_remove(struct pci_dev *pdev)
 }
 
 
-/*
-//функция, создающая символьное устройство для обмена данными между драйвером и GUI
-int create_char_dev(void)
-{
-	int status; 	// для вывода всяких проверяемых значений
-	dev_t dev_nr;	// номер нашего устройства (major, minor)
-	
-	printk(KERN_INFO "my driver - create_char_dev function\n");
-
-	status = alloc_chrdev_region(&dev, 0, MINORMASK + 1, "my_dev"); // переменная для номера, начальный минор, количество устройств (сейчас = допустимому максимуму), имя
-	if (status < 0)
-	{
-		printk(KERN_ERR "my driver - could not allocate major number for device; status = %d\n", status);
-		return status;
-	}
-	dev_major = MAJOR(dev); // "номер" драйвера
-	dev_minor = MINOR(dev); // "номер" устройства
-	printk(KERN_INFO "my driver - device major = %d, minor = %d\n", dev_major, dev_minor);
-
-	// создадим класс, в системе появится /sys/class/my_class
-	my_class = class_create(THIS_MODULE, "my_class");
-	if (IS_ERR(my_class))
-	{
-		printk(KERN_ERR "my driver - could not create class structure for device\n");
-		goto err_class;
-	}
-	else
-		printk(KERN_INFO "my driver - class structure for device created\n");
-	
-	// создадим устройства
-	status = 0;
-	// инициализируем символьное устройство
-	cdev_init(&my_dev.my_cdev, &my_fops);
-	// добавим символьное устройство в систему (теперь ядро сможет вызывать его функции (file operations))
-	cdev_add(&my_dev.my_cdev, MKDEV(dev_major, 0), 1); // последний параметр - количество символьных устройств, ассоциируемых  с устройством; обычно равен 1
-	
-	// добавим устройство в систему, в системе появятся /dev/my_device-0 (теперь мы сможем обращаться к нему из пространства пользователя)
-	my_dev.my_device = device_create(my_class, NULL, MKDEV(dev_major, 0), NULL, "my_device-0"); // класс, родительское устр-во, dev_t, доп.данные, имя
-	if (IS_ERR(my_dev.my_device))
-	{
-		printk(KERN_ERR "my driver - could not create device%d\n", 0);
-		status++;
-	}
-	else
-		printk(KERN_INFO "my driver - device /dev/my_device-%d created\n", 0);
-	if (status) // устройство не создалось
-		goto err_device;
-
-	return 0;
-	
-	
-err_device:
-	class_destroy(my_class);
-err_class:
-	unregister_chrdev_region(dev, MINORMASK + 1); // тут можно просто dev, т.к. внутри функции мы его знаем
-	
-	return -1;
-}
-*/
-
-/*
-// функция, удаляющая символьное устройство
-int destroy_char_dev(void)
-{
-	printk(KERN_INFO "my driver - destroy_char_dev function\n");
-
-	device_destroy(my_class, MKDEV(dev_major, 0));
-	class_destroy(my_class);
-	unregister_chrdev_region(MKDEV(dev_major, 0), MINORMASK + 1); // найдём dev с помощью MKDEV
-	
-	return 0;
-}
-*/
-
-
 // функция, открывающая файл устройства
 static int my_open(struct inode *inode, struct file *file)
 {
@@ -420,7 +326,7 @@ static int my_open(struct inode *inode, struct file *file)
 	struct my_device *my;
 	dev_t dev_nr = inode->i_rdev;
 	
-	list_for_each_entry(my, &card_list, list) // safe не нужен, потому что мы трогаем сам список
+	list_for_each_entry(my, &card_list, list) // safe не нужен, потому что мы не трогаем сам список
 	{
 		if (my->dev_nr == dev_nr) // нашли в списке вызвавшее функцию устройство
 		{
@@ -429,17 +335,6 @@ static int my_open(struct inode *inode, struct file *file)
 		}
 	}
 	return -ENODEV; // error no device
-
-
-	/* для сетевой карты 
-	// установим разрешение на запись регистров конфигурации
-	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
-	printk(KERN_INFO "my driver - command reg 93C46 write 0x%x\n", writeledenable);
-	iowrite8(writeledenable, ptr_bar0 + commandreg);
-	printk(KERN_INFO "my driver - command reg 93C46 is 0x%x\n", ioread8(ptr_bar0 + commandreg));
-	*/
-
-	return 0;
 }
 
 
@@ -460,10 +355,10 @@ static long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd)
 	{
 		case GET_BAR0_ADDR:
-			return bar0baseaddr;
+			return my->bar0addr;
 			
 		case GET_BAR1_ADDR:
-			return bar1baseaddr;
+			return my->bar1addr;
 		
 		case SET_BAR0:
 			my->addr = my->ptr_bar0;
@@ -487,13 +382,6 @@ static ssize_t my_read(struct file *file, char __user *buf, size_t count, loff_t
 	int res, status;
 	struct my_device *my = (struct my_device *)file->private_data;
 	
-	//addr = 0;
-	//addr += *offset;
-	//printk(KERN_INFO "my driver - read function\n");
-	
-	//printk(KERN_INFO "my driver - config register 1 is 0x%x\n", ioread8(ptr_bar0 + confreg1));
-	//res = ioread8(ptr_bar0 + confreg1);
-	//res = ioread8(ptr_bar0 + *offset);
 	res = ioread8(my->addr + *offset);
 	status = copy_to_user(buf, &res, sizeof(res)); // addr to in user space, addr from in kernel space, num of bytes to copy
 	if (status) // 0 - всё хорошо, иначе количество байт, которые не удалось скопировать
@@ -510,16 +398,9 @@ static ssize_t my_read(struct file *file, char __user *buf, size_t count, loff_t
 // функция записи данных в устройство
 static ssize_t my_write(struct file *file, const char __user *buf, size_t count, loff_t *offset)
 {
-	//int i;
 	int res, status;
 	struct my_device *my = (struct my_device *)file->private_data;
 	
-	//addr = 0;
-	//addr += *offset;
-	//printk(KERN_INFO "my driver - write function\n");
-	
-	//get_random_bytes(&i, sizeof(i)); // генерим случайное число
-	//res = (i % 4) * 0x40;
 	status = copy_from_user(&res, buf, count); // addr to in kernel space, addr from in user space, num of bytes to copy
 	if (status) // 0 - всё хорошо, иначе количество байт, которые не удалось скопировать
 	{
@@ -527,8 +408,6 @@ static ssize_t my_write(struct file *file, const char __user *buf, size_t count,
 		return -EFAULT;
 	}
 	printk(KERN_INFO "my driver - register 0x%x write: 0x%x\n", my->addr, res);
-	//iowrite8(res, ptr_bar0 + confreg1);
-	//iowrite8(res, ptr_bar0 + *offset);
 	iowrite8(res, my->addr + *offset);
 
 	return count;
