@@ -28,18 +28,18 @@ MyDriver::MyDriver()
         else
         {
             qDebug() << "Ok!";
-            bar0baseaddr = ioctl(fds[i], GET_BAR0_ADDR, 0);
-            inHex = "0x" + QString("%1").arg(bar0baseaddr, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "my_device-" << i << " bar0 base addr is: " << inHex << "(" << bar0baseaddr << ")";
-            bar1baseaddr = ioctl(fds[i], GET_BAR1_ADDR, 0);
-            if (bar1baseaddr > 0xFFFFFFFF)
+            baraddr = ioctl(fds[i], GET_BAR0_ADDR, 0);
+            inHex = "0x" + QString("%1").arg(baraddr, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "my_device-" << i << " bar0 base addr is: " << inHex << "(" << baraddr << ")";
+            baraddr = ioctl(fds[i], GET_BAR1_ADDR, 0);
+            if (baraddr > 0xFFFFFFFF) // почему-то однажды так случилось при выводе
             {
-                inHex = "0x" + QString("%1").arg(bar1baseaddr , 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-                qDebug() << "Warning!! Wrong my_device-" << i << " bar1 address format:" << inHex << "(" << bar1baseaddr << ")";
-                bar1baseaddr &= 0xFFFFFFFF;
+                inHex = "0x" + QString("%1").arg(baraddr , 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+                qDebug() << "Warning!! Wrong my_device-" << i << " bar1 address format:" << inHex << "(" << baraddr << ")";
+                baraddr &= 0xFFFFFFFF;
             }
-            inHex = "0x" + QString("%1").arg(bar1baseaddr , 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
-            qDebug() << "my_device-" << i << " bar1 base addr is: " << inHex << "(" << bar1baseaddr << ")";
+            inHex = "0x" + QString("%1").arg(baraddr , 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
+            qDebug() << "my_device-" << i << " bar1 base addr is: " << inHex << "(" << baraddr << ")";
         }
     }
 
@@ -68,11 +68,11 @@ void MyDriver::do_reg()
             qDebug() << "my_device-" << i << "-------------------->";
             // читаем
             ioctl(fds[i], SET_BAR0, 0);
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar0 byte" << shift << ": " << inHex;
             ioctl(fds[i], SET_BAR1, 0);
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
 
@@ -82,21 +82,21 @@ void MyDriver::do_reg()
             qDebug() << "data to write: " << inHex;
             buf = data0;
             ioctl(fds[i], SET_BAR0, 0);
-            write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
             unsigned int data1 = (qrand() % 4) * 0x55; // случайным образом заполним
             inHex = "0x" + QString("%1").arg(data1, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data to write: " << inHex;
             buf = data1;
             ioctl(fds[i], SET_BAR1, 0);
-            write_res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
 
             // читаем снова
             ioctl(fds[i], SET_BAR0, 0);
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar0 byte" << shift << ": " << inHex;
             ioctl(fds[i], SET_BAR1, 0);
-            read_res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
             //*/
