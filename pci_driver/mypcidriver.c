@@ -46,8 +46,6 @@ MODULE_DEVICE_TABLE(pci, my_ids);
 // прототипы функций (функции должны быть определены выше точки использования)
 static int 	my_probe(struct pci_dev *pdev, const struct pci_device_id *id);
 static void my_remove(struct pci_dev *pdev);
-//int create_char_dev(void);
-//int destroy_char_dev(void);
 static int my_open(struct inode *inode, struct file *file);
 static int my_release(struct inode *inode, struct file *file);
 static long my_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
@@ -57,7 +55,7 @@ static ssize_t my_write(struct file *file, const char __user *buf, size_t count,
 
 // структура драйвера
 static struct pci_driver my_driver = {
-	.name = "my_driver",	// имя драйвера, которое будет использовано ядром в /sys/bus/pci/drivers
+	.name = "mypcidriver",	// имя драйвера, которое будет использовано ядром в /sys/bus/pci/drivers
 	.id_table = my_ids, 	// таблица пар Vendor ID и Device ID, с которыми может работать драйвер:
 	.probe = my_probe,		// функция, вызываемая ядром после загрузки драйвера, служит для инициализации оборудования
 	.remove = my_remove		// функция, вызываемая ядром при выгрузке драйвера, служит для освобождения каких-либо ранее занятых ресурсов
