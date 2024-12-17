@@ -1,0 +1,9 @@
+[Unit]
+Description=Unbind serial, bind mypcidriver
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/change_driver.sh
+
+[Install]
+WantedBy=multi-user.target

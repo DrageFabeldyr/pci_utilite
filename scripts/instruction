@@ -1,0 +1,13 @@
+создать файл скрипта (переместить скрипт из этой папки):
+sudo nano /usr/local/bin/change_driver.sh
+
+сделать скрипт исполняемым:
+sudo chmod +x /usr/local/bin/change_driver.sh
+
+добавить скрипт в автозагрузку, создав файл сервиса для него (переместить сервис из этой папки):
+sudo nano /etc/systemd/system/change_driver.service
+
+активировать службу и перезагрузиться:
+sudo systemctl daemon-reload
+sudo systemctl enable change_driver.service
+reboot
