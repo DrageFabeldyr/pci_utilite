@@ -69,10 +69,14 @@ void MyDriver::do_reg()
             // читаем
             ioctl(fds[i], SET_BAR0, 0);
             res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while reading bar0: " << strerror(errno);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar0 byte" << shift << ": " << inHex;
             ioctl(fds[i], SET_BAR1, 0);
             res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while reading bar1: " << strerror(errno);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
 
@@ -83,20 +87,28 @@ void MyDriver::do_reg()
             buf = data0;
             ioctl(fds[i], SET_BAR0, 0);
             res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while writing bar0: " << strerror(errno);
             unsigned int data1 = (qrand() % 4) * 0x55; // случайным образом заполним
             inHex = "0x" + QString("%1").arg(data1, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data to write: " << inHex;
             buf = data1;
             ioctl(fds[i], SET_BAR1, 0);
             res = pwrite(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while writing bar1: " << strerror(errno);
 
             // читаем снова
             ioctl(fds[i], SET_BAR0, 0);
             res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while reading bar0: " << strerror(errno);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar0 byte" << shift << ": " << inHex;
             ioctl(fds[i], SET_BAR1, 0);
             res = pread(fds[i], (void*)&buf, sizeof(buf), shift);
+            if (res == -1)
+                qDebug() << "Error while reading bar1: " << strerror(errno);
             inHex = "0x" + QString("%1").arg(buf, 2, 16, QChar('0')).toUpper(); // чтобы было красиво, например "0x0C", а не "c"
             qDebug() << "data from bar1 byte" << shift << ": " << inHex;
             //*/
